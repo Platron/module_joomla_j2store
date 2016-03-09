@@ -50,23 +50,27 @@ class plgJ2StorePayment_platron extends J2StorePaymentPlugin
      */
     function _prePayment( $data )
     {
-		$order = JTable::getInstance('Orders', 'Table');
-        $order->load( $data['orderpayment_id'] );
-		$items = $order->getItems();
-
+        F0FTable::addIncludePath ( JPATH_ADMINISTRATOR . '/components/com_j2store/tables' );       
+        $order = F0FTable::getInstance ( 'Order', 'J2StoreTable' )->getClone ();
+        $order->load ( array (
+        		'order_id' => $data['order_id']
+        ) );        
 		$strDescription = '';
+		$items = $order->getItems();
 		foreach($items as $objItem){
 			$strDescription .= $objItem->orderitem_name;
-			if($objItem->orderitem_quantity > 1)
-				$strDescription .= "*".$objItem->orderitem_quantity;
-			$strDescription .= "; ";
+			if($objItem->orderitem_quantity > 1){
+				$strDescription .= "*".$objItem->orderitem_quantity."; ";
+			}
 		}
+		
 		$nLifeTime = $this->params->get("lifetime", '');
 		
 		$strCurrency = $order->currency_code;
-		if($strCurrency == 'RUB')
+		if($strCurrency == 'RUB'){
 			$strCurrency = 'RUR';
-
+		}
+		
 		$returnUrl = JURI::base() . "index.php?option=com_j2store&view=checkout&task=confirmPayment&orderpayment_type=payment_platron&Itemid=".$data['order_id']."&orderpayment_id=".$data['orderpayment_id'];
 		$arrFields = array(
 			'pg_merchant_id'		=> $this->params->get('merchant_id',''),
@@ -83,52 +87,37 @@ class plgJ2StorePayment_platron extends J2StorePaymentPlugin
 			'pg_success_url'		=> $this->params->get("success_url",''),
 			'pg_failure_url'		=> $this->params->get("failure_url",''),
 			'pg_request_method'		=> 'GET',
+			'user_cms'				=> 'joomla_j2store',
 			'pg_salt'				=> rand(21,43433), // Параметры безопасности сообщения. Необходима генерация pg_salt и подписи сообщения.
 		);
 
-		if(!empty($data['orderinfo']['phone_1'])){
-			preg_match_all("/\d/", $data['orderinfo']['phone_1'], $array);
+		$orderinfo = $data['order']->getOrderInformation();
+		if(!empty($orderinfo->billing_phone_1)){
+			preg_match_all("/\d/", $orderinfo->billing_phone_1, $array);
 			$strPhone = implode('',@$array[0]);
 			$arrFields['pg_user_phone'] = $strPhone;
 		}
 		
-		if(!empty($data['orderinfo']['phone_2'])){
-			preg_match_all("/\d/", $data['orderinfo']['phone_2'], $array);
+		if(!empty($orderinfo->billing_phone_2)){
+			preg_match_all("/\d/", $orderinfo->billing_phone_2, $array);
 			$strPhone = implode('',@$array[0]);
 			$arrFields['pg_user_phone'] = $strPhone;
 		}
 		
-		if(!empty($data['orderinfo']['billing_phone_1'])){
-			preg_match_all("/\d/", $data['orderinfo']['billing_phone_1'], $array);
-			$strPhone = implode('',@$array[0]);
-			$arrFields['pg_user_phone'] = $strPhone;
-		}
-
-		if(!empty($data['orderinfo']['billing_phone_2'])){
-			preg_match_all("/\d/", $data['orderinfo']['billing_phone_2'], $array);
-			$strPhone = implode('',@$array[0]);
-			$arrFields['pg_user_phone'] = $strPhone;
-		}
-
-		if(!empty($data['orderinfo']['billing_email'])){
-			$arrFields['pg_user_email'] = $data['orderinfo']['billing_email'];
-			$arrFields['pg_user_contact_email'] = $data['orderinfo']['billing_email'];
-		}
 		
-		if(!empty($data['orderinfo']['email'])){
-			$arrFields['pg_user_email'] = $data['orderinfo']['email'];
-			$arrFields['pg_user_contact_email'] = $data['orderinfo']['email'];
+		if(!empty($order->user_email)){
+			$arrFields['pg_user_email'] = $order->user_email;
+			$arrFields['pg_user_contact_email'] = $order->user_email;
 		}
-
-		if(!empty($data['user_email'])){
-			$arrFields['pg_user_email'] = $data['user_email'];
-			$arrFields['pg_user_contact_email'] = $data['user_email'];
-		}
-
 
 		$arrFields['pg_sig'] = PG_Signature::make('payment.php', $arrFields, $this->params->get("secret_key",''));
-
-		$html = $this->_getLayout('prepayment', $arrFields);
+		// create JObject and insert data from array params $arrFields
+		$vars = new JObject(); 
+		unset($vars->_errors);
+		foreach ($arrFields as $key => $value) {
+			$vars->$key = $arrFields[$key];
+		}
+		$html = $this->_getLayout('prepayment', $vars);		
         return $html;
     }
 
@@ -148,9 +137,11 @@ class plgJ2StorePayment_platron extends J2StorePaymentPlugin
 			$arrRequest = $_GET;
 		
 		
-		$order = JTable::getInstance('Orders', 'Table');
-        $order->load( $arrRequest['orderpayment_id'] );
-		
+		F0FTable::addIncludePath ( JPATH_ADMINISTRATOR . '/components/com_j2store/tables' );       
+        $order = F0FTable::getInstance ( 'Order', 'J2StoreTable' )->getClone ();
+        $order->load ( array (
+        		'order_id' =>  $arrRequest['pg_order_id']
+        ) );        	
 		$arrStatuses = array(
 			'Confirmed' => 1,
 			'Processed' => 2,
@@ -158,12 +149,9 @@ class plgJ2StorePayment_platron extends J2StorePaymentPlugin
 			'Pending' => 4,
 			'Incomplete' => 5,
 		);
-		
 		$thisScriptName = PG_Signature::getOurScriptName();
-
 		if (empty($arrRequest['pg_sig']) || !PG_Signature::check($arrRequest['pg_sig'], $thisScriptName, $arrRequest, $this->params->get('secret_key','')))
 			die("Wrong signature");
-
 		if(!isset($arrRequest['pg_result'])){
 			$bCheckResult = 0;
 			if(empty($order) || !in_array( $order->transaction_status, array('Incomplete','Pending')))
@@ -186,6 +174,7 @@ class plgJ2StorePayment_platron extends J2StorePaymentPlugin
 
 		}
 		else{
+			
 			$bResult = 0;
 			if(empty($order) || 
 					(!in_array( $order->transaction_status, array('Incomplete','Pending')) &&
@@ -196,6 +185,7 @@ class plgJ2StorePayment_platron extends J2StorePaymentPlugin
 			elseif(sprintf('%0.2f',$arrRequest['pg_amount']) != sprintf('%0.2f',$order->order_total))
 				$strResponseDescription = "Неверная сумма";
 			else {
+						
 				$bResult = 1;
 				$strResponseStatus = 'ok';
 				$strResponseDescription = "Оплата принята";
@@ -204,14 +194,14 @@ class plgJ2StorePayment_platron extends J2StorePaymentPlugin
 					$order->transaction_status = 'Processed';
 					$order->order_state_id = $arrStatuses['Processed'];
 					$order->order_state = 'J2STORE_PROCESSED';
-					$order->save();
+					$order->save($arrRequest);
 				}
 				else{
 					// Не удачная оплата
 					$order->transaction_status = 'Failed';
 					$order->order_state_id = $arrStatuses['Failed'];
 					$order->order_state = 'J2STORE_FAILED';
-					$order->save();
+					$order->save($arrRequest);
 				}
 			}
 			if(!$bResult)
