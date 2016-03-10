@@ -67,9 +67,6 @@ class plgJ2StorePayment_platron extends J2StorePaymentPlugin
 		$nLifeTime = $this->params->get("lifetime", '');
 		
 		$strCurrency = $order->currency_code;
-		if($strCurrency == 'RUB'){
-			$strCurrency = 'RUR';
-		}
 		
 		$returnUrl = JURI::base() . "index.php?option=com_j2store&view=checkout&task=confirmPayment&orderpayment_type=payment_platron&Itemid=".$data['order_id']."&orderpayment_id=".$data['orderpayment_id'];
 		$arrFields = array(
@@ -87,7 +84,7 @@ class plgJ2StorePayment_platron extends J2StorePaymentPlugin
 			'pg_success_url'		=> $this->params->get("success_url",''),
 			'pg_failure_url'		=> $this->params->get("failure_url",''),
 			'pg_request_method'		=> 'GET',
-			'user_cms'				=> 'joomla_j2store',
+			'cms_payment_module'	=> 'J2STORE',
 			'pg_salt'				=> rand(21,43433), // Параметры безопасности сообщения. Необходима генерация pg_salt и подписи сообщения.
 		);
 
