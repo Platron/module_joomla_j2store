@@ -77,7 +77,6 @@ class plgJ2StorePayment_platron extends J2StorePaymentPlugin
 			'pg_lifetime'			=> isset($nLifeTime)?$nLifeTime*60:0,
 			'pg_testing_mode'		=> $this->params->get("test_mode",''),
 			'pg_description'		=> $strDescription,
-			'pg_user_ip'			=> $_SERVER['REMOTE_ADDR'],
 			'pg_language'			=> (JFactory::getLanguage()->getTag() == 'ru-RU')?'ru':'en',
 			'pg_check_url'			=> $returnUrl,
 			'pg_result_url'			=> $returnUrl,
